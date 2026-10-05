@@ -126,7 +126,7 @@ const RichText = ({ value, onChange }) => {
 /* ========================= Login ========================= */
 function LoginPage({ onLogin }) {
   const [loginId, setLoginId] = useState("admin");
-  const [password, setPassword] = useState("demo1234");
+  const [password, setPassword] = useState("Aalidhra@2026");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const demoRoles = [
@@ -171,7 +171,7 @@ function LoginPage({ onLogin }) {
           <div className="role-chips">
             {demoRoles.map(([id, label]) => (
               <button type="button" key={id} className={`chip ${loginId === id ? "active" : ""}`}
-                onClick={() => { setLoginId(id); setPassword("demo1234"); }}
+                onClick={() => { setLoginId(id); setPassword("Aalidhra@2026"); }}
                 data-testid={`login-chip-${id}`}>{label}</button>
             ))}
           </div>
@@ -189,7 +189,7 @@ function LoginPage({ onLogin }) {
           <button type="submit" className="primary-btn login-btn" disabled={busy} data-testid="login-submit-button">
             {busy ? "Signing in..." : "Enter workspace"} <ArrowUpRight size={17} />
           </button>
-          <p className="demo-note"><span className="live-dot" /> Demo mode · password is <code>demo1234</code> for any role</p>
+          <p className="demo-note"><span className="live-dot" /> Demo mode · password is <code>Aalidhra@2026</code> for any role</p>
         </form>
         <div className="login-support">Need help? <span>Contact workspace admin</span></div>
       </section>
