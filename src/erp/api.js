@@ -145,7 +145,7 @@ const saveJob = (j) => update("job_work", j.id, pick(j, [...JW_KEYS, "actual_ret
 export const api = {
   // auth
   login: async (login_id, password) => {
-    await bootstrapWorkspace().catch(() => {});
+    await bootstrapWorkspace().catch((e) => console.error("bootstrap failed", e));
     me = null;
     const { data, error } = await supabase.auth.signInWithPassword({ email: authEmail(login_id), password });
     if (error) fail("Invalid credentials", 401);
