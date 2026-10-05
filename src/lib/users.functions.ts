@@ -91,13 +91,13 @@ export const bootstrapWorkspace = createServerFn({ method: "POST" }).handler(asy
     ["Nilesh Trivedi", "accountant@forgeflow.demo", "accountant", "Accountant"],
     ["Vikram Dealer", "dealer@forgeflow.demo", "dealer", "Dealer"],
   ];
-  let created = 0;
+  let created = 0; const errors: (string | undefined)[] = [];
   for (const [name, email, login_id, role] of demo) {
     const { data, error } = await supabaseAdmin.auth.admin.createUser({ email: authEmail(login_id), password: "demo1234", email_confirm: true });
-    if (error || !data.user) continue;
+    if (error || !data.user) { console.error("demo user", login_id, error?.message); errors.push(error?.message); continue; }
     await supabaseAdmin.from("profiles").insert({ id: data.user.id, name, email, login_id, phone: "+91 98250 00000" });
     await supabaseAdmin.from("user_roles").insert({ user_id: data.user.id, role });
     created++;
   }
-  return { created };
+  return { created, errors };
 });
