@@ -56,7 +56,7 @@ export const updateErpUser = createServerFn({ method: "POST" })
       const { error } = await supabaseAdmin.auth.admin.updateUserById(data.id, authPatch);
       if (error) throw new Error(error.message);
     }
-    const prof: Record<string, unknown> = {};
+    const prof: any = {};
     for (const k of ["name", "email", "login_id", "phone", "active"] as const) if (p[k] !== undefined) prof[k] = p[k];
     if (Object.keys(prof).length) await supabaseAdmin.from("profiles").update(prof).eq("id", data.id);
     if (p.role) {
