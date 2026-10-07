@@ -1747,7 +1747,11 @@ function JobWorkPage({ user, jobs, inventory, reload }) {
         <div className="form-grid">
           <div className="form-row-2">
             <div><label className="field-label">Item / material *</label>
-              <input list="jw-items" value={j.item} onChange={e => setJ({ ...j, item: e.target.value })} data-testid="jw-item" /></div>
+              <input list="jw-items" value={j.item} onChange={e => {
+                const v = e.target.value;
+                const match = inventory.find(it => `${it.sku} · ${it.name}` === v || it.name === v);
+                setJ({ ...j, item: match ? match.name : v, inventory_item_id: match ? match.id : j.inventory_item_id });
+              }} data-testid="jw-item" /></div>
             <div><label className="field-label">Work type (optional)</label>
               <input list="jw-types" value={j.work_type} onChange={e => setJ({ ...j, work_type: e.target.value })} data-testid="jw-work-type"
                 placeholder="e.g. Hardening + Nitriding + Blackodising" /></div>
