@@ -1741,7 +1741,7 @@ function JobWorkPage({ user, jobs, inventory, reload }) {
       <Modal show={show} onClose={() => { setShow(false); setEdit(null); }}
         title={edit ? `Edit ${edit.number}` : "Create multi-stage job work"} wide>
         <datalist id="jw-vendors">{sugg.vendors.map(v => <option key={v} value={v} />)}</datalist>
-        <datalist id="jw-items">{sugg.items.map(v => <option key={v} value={v} />)}</datalist>
+        <datalist id="jw-items">{[...new Set([...inventory.map(it => `${it.sku} · ${it.name}`), ...inventory.map(it => it.name), ...sugg.items])].map(v => <option key={v} value={v} />)}</datalist>
         <datalist id="jw-types">{sugg.work_types.map(v => <option key={v} value={v} />)}</datalist>
         <datalist id="jw-processes">{(sugg.processes || []).map(v => <option key={v} value={v} />)}</datalist>
         <div className="form-grid">
