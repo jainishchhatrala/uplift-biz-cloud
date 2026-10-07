@@ -2541,6 +2541,7 @@ export default function App() {
     || (x.id === "reports" && (user.role === "Admin" || user.role === "Accountant"))
     || (x.id === "inventory" && (user.role === "Admin" || user.role === "Production"))
     || (x.id === "jobwork" && (user.role === "Admin" || user.role === "Production"))
+    || (x.id === "vendors" && (user.role === "Admin" || user.role === "Production"))
   ) })).filter(g => g.items.length);
 
   const pageTitle = page === "dashboard" ? "Overview" : NAV.flatMap(g => g.items).find(x => x.id === page)?.label || "Workspace";
@@ -2560,6 +2561,7 @@ export default function App() {
       case "payments": return <PaymentsPage user={user} payments={payments} orders={orders} reload={reload} />;
       case "inventory": return <InventoryPage user={user} items={inventory} txns={invTxns} reload={reload} />;
       case "jobwork": return <JobWorkPage user={user} jobs={jobs} inventory={inventory} reload={reload} />;
+      case "vendors": return <VendorsPage user={user} company={company} />;
       case "team": return <TeamPage user={user} users={users} reload={reload} />;
       case "products": return <ProductsPage user={user} products={products} reload={reload} />;
       case "settings": return <SettingsPage user={user} company={company} reload={reload} />;
