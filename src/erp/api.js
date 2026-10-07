@@ -354,6 +354,51 @@ export const api = {
     return data;
   },
 
+  // vendors
+  listVendors: async () => {
+    const [vendors, jobs] = await Promise.all([list("vendors", "name", true), list("job_work")]);
+    const now = nowIso();
+    const key = (s) => (s || "").trim().toLowerCase();
+    const map = new Map(vendors.map((v) => [key(v.name), { ...v, registered: true }]));
+    for (const j of jobs.map(decorateJob)) for (const s of j.stages || []) {
+      if (!key(s.vendor)) continue;
+      if (!map.has(key(s.vendor))) map.set(key(s.vendor), { id: null, name: s.vendor.trim(), vendor_type: "Job Work", registered: false });
+      const v = map.get(key(s.vendor));
+      v._stages = [...(v._stages || []), { ...s, job_id: j.id, job_number: j.number, item: j.item }];
+    }
+    return [...map.values()].map((v) => {
+      const st = v._stages || [];
+      const done = st.filter((s) => s.status === "Completed");
+      const day = (d) => (d ? String(d).slice(0, 10) : null);
+      const onTime = done.filter((s) => !s.expected_return || day(s.actual_return) <= day(s.expected_return)).length;
+      const lateDone = done.length - onTime;
+      const openLate = st.filter((s) => !["Completed", "Cancelled"].includes(s.status) && s.expected_return && s.expected_return < now);
+      const recv = done.reduce((a, s) => a + (Number(s.quantity_received) || 0), 0);
+      const rej = done.reduce((a, s) => a + (Number(s.rejection_quantity) || 0), 0);
+      const judged = done.length + openLate.length;
+      const onTimePct = judged ? onTime / judged : null;
+      const rejPct = recv + rej > 0 ? rej / (recv + rej) : 0;
+      const score = onTimePct == null ? null : 0.5 * onTimePct + 0.5 * (1 - Math.min(1, rejPct * 5));
+      const { _stages, ...rest } = v;
+      return { ...rest, stages: st, total_jobs: st.length, completed: done.length, on_time: onTime,
+        delayed: lateDone + openLate.length, open_delayed: openLate, active: v.active ?? true,
+        received_qty: recv, rejected_qty: rej, rejection_pct: rejPct * 100,
+        on_time_pct: onTimePct == null ? null : onTimePct * 100,
+        rating: score == null ? null : Math.round((1 + 4 * score) * 10) / 10 };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+  },
+  saveVendor: async (b) => {
+    const row = pick(b, ["name", "vendor_type", "contact_person", "phone", "whatsapp", "email", "city", "address", "services", "notes", "active"]);
+    return b.id ? update("vendors", b.id, row) : insert("vendors", row);
+  },
+  deleteVendor: (id) => del("vendors", id),
+  vendorLogs: (vendorId) => run(supabase.from("vendor_logs").select("*, jw:job_work(number, item)").eq("vendor_id", vendorId).order("created_at", { ascending: false })),
+  addVendorLog: async (b) => {
+    const u = await currentUser();
+    return insert("vendor_logs", { ...pick(b, ["vendor_id", "job_work_id", "log_type", "note", "delay_reason", "next_followup_at"]), by_user: u.id });
+  },
+  deleteVendorLog: (id) => del("vendor_logs", id),
+
   // job work
   listJobwork: async () => (await list("job_work")).map(decorateJob),
   jobworkSuggestions: async () => {
