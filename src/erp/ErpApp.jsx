@@ -37,6 +37,7 @@ const NAV = [
     { id: "payments", label: "Payments", icon: WalletCards },
     { id: "inventory", label: "Inventory", icon: Package },
     { id: "jobwork", label: "Job Work", icon: Wrench },
+    { id: "vendors", label: "Vendors", icon: Building2 },
     { id: "reports", label: "Reports", icon: Activity },
   ]},
   { label: "Administration", items: [
@@ -2131,6 +2132,169 @@ function TeamPage({ user, users, reload }) {
 }
 
 /* ========================= Products ========================= */
+/* ========================= Vendors ========================= */
+const VENDOR_BLANK = { name: "", vendor_type: "Job Work", contact_person: "", phone: "", whatsapp: "", email: "", city: "", address: "", services: "", notes: "", active: true };
+const Stars = ({ value }) => value == null ? <span className="muted-cell">No data yet</span> : (
+  <span title={`${value} / 5`} style={{ whiteSpace: "nowrap" }}>
+    {[1, 2, 3, 4, 5].map(n => <span key={n} style={{ color: n <= Math.round(value) ? "var(--orange, #f59e0b)" : "var(--line, #d1d5db)" }}>★</span>)}
+    <small style={{ marginLeft: 6 }}>{value.toFixed(1)}</small>
+  </span>
+);
+const vendorMsg = (v, company) => {
+  const lines = (v.open_delayed || []).map(s => `• ${s.job_number} – ${s.item} (${s.process || "job work"}), due ${fmtDate(s.expected_return)}, qty ${s.quantity_sent || 0}`);
+  return `Namaste ${v.contact_person || v.name},\n\nKindly share the status update for the following pending material:\n${lines.join("\n") || "• Your pending job work"}\n\nPlease confirm the dispatch date.\n\nRegards,\n${company?.company_name || "Aalidhra Cashew"}`;
+};
+const waLink = (v, company) => {
+  let d = String(v.whatsapp || v.phone || "").replace(/\D/g, "");
+  if (d.length === 10) d = "91" + d;
+  return `https://wa.me/${d}?text=${encodeURIComponent(vendorMsg(v, company))}`;
+};
+const mailLink = (v, company) => `mailto:${v.email || ""}?subject=${encodeURIComponent("Status update required – pending job work")}&body=${encodeURIComponent(vendorMsg(v, company))}`;
+
+function VendorsPage({ user, company }) {
+  const [vendors, setVendors] = useState(null);
+  const [q, setQ] = useState("");
+  const [type, setType] = useState("All");
+  const [form, setForm] = useState(null);
+  const [sel, setSel] = useState(null);
+  const [logs, setLogs] = useState([]);
+  const [log, setLog] = useState({ log_type: "Call", note: "", delay_reason: "", next_followup_at: "", job_work_id: "" });
+  const load = useCallback(() => api.listVendors().then(setVendors).catch(() => setVendors([])), []);
+  useEffect(() => { load(); }, [load]);
+  const openVendor = async (v) => { setSel(v); setLogs(v.id ? await api.vendorLogs(v.id).catch(() => []) : []); };
+  const ensureId = async (v) => v.id || (await api.saveVendor({ ...VENDOR_BLANK, name: v.name })).id;
+  const save = async () => {
+    if (!form.name?.trim()) { toast.error("Vendor name required"); return; }
+    try { await api.saveVendor(form); toast.success("Vendor saved"); setForm(null); await load(); }
+    catch (e) { toast.error(e?.response?.data?.detail || "Save failed"); }
+  };
+  const remove = async (v) => {
+    if (!window.confirm(`Delete ${v.name}? Follow-up log will also be deleted.`)) return;
+    try { await api.deleteVendor(v.id); toast.success("Deleted"); setSel(null); await load(); } catch { toast.error("Delete failed"); }
+  };
+  const addLog = async () => {
+    if (!log.note.trim()) { toast.error("Write what was discussed"); return; }
+    try {
+      const id = await ensureId(sel);
+      await api.addVendorLog({ ...log, vendor_id: id, job_work_id: log.job_work_id || null, next_followup_at: log.next_followup_at || null });
+      toast.success("Log added");
+      setLog({ log_type: "Call", note: "", delay_reason: "", next_followup_at: "", job_work_id: "" });
+      const fresh = { ...sel, id, registered: true };
+      setSel(fresh); setLogs(await api.vendorLogs(id)); load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+  };
+  if (!vendors) return <div className="page-content"><Loader /></div>;
+  const shown = vendors.filter(v => (type === "All" || v.vendor_type === type) && (!q || `${v.name} ${v.city || ""} ${v.services || ""}`.toLowerCase().includes(q.toLowerCase())));
+  const jobOptions = sel ? [...new Map((sel.stages || []).map(s => [s.job_id, s])).values()] : [];
+  return (
+    <div className="page-content" data-testid="page-vendors">
+      <div className="page-heading">
+        <div><p className="eyebrow">SUPPLY PARTNERS</p><h1>Vendors</h1>
+          <p className="subheading">Auto rating from on-time delivery and rejection · follow-up log · status reminders.</p></div>
+        <button className="primary-btn" onClick={() => setForm({ ...VENDOR_BLANK })} data-testid="vendor-add"><Plus size={17} /> Add vendor</button>
+      </div>
+      <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+        <input placeholder="Search vendor, city, service..." value={q} onChange={e => setQ(e.target.value)} style={{ maxWidth: 320 }} />
+        <select value={type} onChange={e => setType(e.target.value)} style={{ maxWidth: 180 }}>
+          <option>All</option><option>Job Work</option><option>Other</option>
+        </select>
+      </div>
+      <section className="panel table-panel">
+        <div className="table-scroll">
+          <table>
+            <thead><tr><th>Vendor</th><th>Type</th><th>Rating</th><th>On time</th><th>Rejection</th><th>Pending late</th><th>Contact</th><th></th></tr></thead>
+            <tbody>
+              {shown.length === 0 && <tr><td colSpan={8}><Empty msg="No vendors yet" /></td></tr>}
+              {shown.map((v, i) => (
+                <tr key={v.name} data-testid={`vendor-row-${i}`} style={{ cursor: "pointer" }} onClick={() => openVendor(v)}>
+                  <td><strong>{v.name}</strong>{!v.registered && <> <Badge tone="gray">From job work</Badge></>}<br /><span className="table-sub">{v.city || v.services || ""}</span></td>
+                  <td>{v.vendor_type}</td>
+                  <td><Stars value={v.rating} /></td>
+                  <td>{v.on_time_pct == null ? "—" : `${Math.round(v.on_time_pct)}% (${v.on_time}/${v.completed + v.open_delayed.length})`}</td>
+                  <td>{v.received_qty + v.rejected_qty > 0 ? `${v.rejection_pct.toFixed(1)}% (${v.rejected_qty})` : "—"}</td>
+                  <td>{v.open_delayed.length ? <Badge tone="red">{v.open_delayed.length} late</Badge> : <Badge tone="green">OK</Badge>}</td>
+                  <td>{v.phone || v.whatsapp || "—"}</td>
+                  <td className="row-actions" onClick={e => e.stopPropagation()}>
+                    {(v.whatsapp || v.phone) && <a className="icon-btn" href={waLink(v, company)} target="_blank" rel="noreferrer" title="WhatsApp status request"><MessageCircle size={15} /></a>}
+                    {v.email && <a className="icon-btn" href={mailLink(v, company)} title="Email status request"><FileText size={15} /></a>}
+                    <button className="icon-btn" onClick={() => setForm(v.registered ? { ...VENDOR_BLANK, ...v } : { ...VENDOR_BLANK, name: v.name })} title="Edit"><Pencil size={15} /></button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <p className="muted-cell" style={{ marginTop: 10, fontSize: 12 }}>Rating = 50% on-time delivery + 50% low rejection (from completed job-work stages), out of 5 stars.</p>
+
+      <Modal show={!!form} onClose={() => setForm(null)} title={form?.id ? "Edit vendor" : "Add vendor"} wide>
+        {form && <div className="form-grid">
+          <div className="form-row-2">
+            <div><label className="field-label">Vendor name *</label><input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
+            <div><label className="field-label">Type</label><select value={form.vendor_type} onChange={e => setForm({ ...form, vendor_type: e.target.value })}><option>Job Work</option><option>Other</option></select></div>
+          </div>
+          <div className="form-row-3">
+            <div><label className="field-label">Contact person</label><input value={form.contact_person || ""} onChange={e => setForm({ ...form, contact_person: e.target.value })} /></div>
+            <div><label className="field-label">Phone</label><input value={form.phone || ""} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
+            <div><label className="field-label">WhatsApp</label><input value={form.whatsapp || ""} onChange={e => setForm({ ...form, whatsapp: e.target.value })} /></div>
+          </div>
+          <div className="form-row-2">
+            <div><label className="field-label">Email</label><input value={form.email || ""} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
+            <div><label className="field-label">City</label><input value={form.city || ""} onChange={e => setForm({ ...form, city: e.target.value })} /></div>
+          </div>
+          <label className="field-label">Services / processes</label><input value={form.services || ""} onChange={e => setForm({ ...form, services: e.target.value })} placeholder="Hardening, Plating..." />
+          <label className="field-label">Address</label><textarea value={form.address || ""} onChange={e => setForm({ ...form, address: e.target.value })} />
+          <label className="field-label">Notes</label><textarea value={form.notes || ""} onChange={e => setForm({ ...form, notes: e.target.value })} />
+          <button className="primary-btn full-btn" onClick={save}><Check size={17} /> Save</button>
+        </div>}
+      </Modal>
+
+      <Modal show={!!sel} onClose={() => setSel(null)} title={sel?.name || ""} eyebrow="VENDOR PERFORMANCE & FOLLOW-UP" wide>
+        {sel && <div className="form-grid">
+          <div style={{ display: "flex", gap: 18, flexWrap: "wrap", alignItems: "center" }}>
+            <Stars value={sel.rating} />
+            <span>Jobs: <strong>{sel.total_jobs}</strong></span>
+            <span>On time: <strong>{sel.on_time}</strong></span>
+            <span>Delayed: <strong>{sel.delayed}</strong></span>
+            <span>Rejected: <strong>{sel.rejected_qty}</strong> / {sel.received_qty + sel.rejected_qty}</span>
+            {(sel.whatsapp || sel.phone) && <a className="ghost-btn" href={waLink(sel, company)} target="_blank" rel="noreferrer"><MessageCircle size={15} /> WhatsApp</a>}
+            {sel.email && <a className="ghost-btn" href={mailLink(sel, company)}><FileText size={15} /> Email</a>}
+            {sel.registered && user.role === "Admin" && <button className="ghost-btn" onClick={() => remove(sel)}><Trash2 size={15} /> Delete</button>}
+          </div>
+          {sel.open_delayed.length > 0 && <div className="stage-stock-notice"><Clock3 size={13} /> Late: {sel.open_delayed.map(s => `${s.job_number} (due ${fmtDate(s.expected_return)})`).join(", ")}</div>}
+
+          <h4 style={{ margin: "8px 0 0" }}>Add follow-up log</h4>
+          <div className="form-row-3">
+            <div><label className="field-label">Type</label><select value={log.log_type} onChange={e => setLog({ ...log, log_type: e.target.value })}>
+              <option>Call</option><option>WhatsApp</option><option>Email</option><option>Visit</option><option>Delay reason</option><option>Quality issue</option><option>Note</option></select></div>
+            <div><label className="field-label">Job work</label><select value={log.job_work_id} onChange={e => setLog({ ...log, job_work_id: e.target.value })}>
+              <option value="">— General —</option>{jobOptions.map(s => <option key={s.job_id} value={s.job_id}>{s.job_number} · {s.item}</option>)}</select></div>
+            <div><label className="field-label">Next follow-up</label><input type="date" value={log.next_followup_at} onChange={e => setLog({ ...log, next_followup_at: e.target.value })} /></div>
+          </div>
+          <label className="field-label">What was discussed *</label>
+          <textarea value={log.note} onChange={e => setLog({ ...log, note: e.target.value })} />
+          <label className="field-label">Delay reason (if any)</label>
+          <input value={log.delay_reason} onChange={e => setLog({ ...log, delay_reason: e.target.value })} placeholder="e.g. power cut, machine breakdown, labour shortage" />
+          <button className="primary-btn" onClick={addLog}><Plus size={16} /> Save log</button>
+
+          <h4 style={{ margin: "12px 0 0" }}>History</h4>
+          {logs.length === 0 ? <span className="muted-cell">No logs yet</span> : logs.map(l => (
+            <div key={l.id} className="panel" style={{ padding: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                <span><Badge tone={l.log_type === "Delay reason" ? "red" : l.log_type === "Quality issue" ? "orange" : "blue"}>{l.log_type}</Badge> {l.jw && <small className="mono">{l.jw.number}</small>}</span>
+                <small className="muted-cell">{fmtDateTime(l.created_at)}</small>
+              </div>
+              <p style={{ margin: "6px 0" }}>{l.note}</p>
+              {l.delay_reason && <small><strong>Delay reason:</strong> {l.delay_reason}</small>}
+              {l.next_followup_at && <small style={{ display: "block" }}><strong>Next follow-up:</strong> {fmtDate(l.next_followup_at)}</small>}
+            </div>
+          ))}
+        </div>}
+      </Modal>
+    </div>
+  );
+}
+
 function ProductsPage({ user, products, reload }) {
   const [show, setShow] = useState(false);
   const [edit, setEdit] = useState(null);
@@ -2377,6 +2541,7 @@ export default function App() {
     || (x.id === "reports" && (user.role === "Admin" || user.role === "Accountant"))
     || (x.id === "inventory" && (user.role === "Admin" || user.role === "Production"))
     || (x.id === "jobwork" && (user.role === "Admin" || user.role === "Production"))
+    || (x.id === "vendors" && (user.role === "Admin" || user.role === "Production"))
   ) })).filter(g => g.items.length);
 
   const pageTitle = page === "dashboard" ? "Overview" : NAV.flatMap(g => g.items).find(x => x.id === page)?.label || "Workspace";
@@ -2396,6 +2561,7 @@ export default function App() {
       case "payments": return <PaymentsPage user={user} payments={payments} orders={orders} reload={reload} />;
       case "inventory": return <InventoryPage user={user} items={inventory} txns={invTxns} reload={reload} />;
       case "jobwork": return <JobWorkPage user={user} jobs={jobs} inventory={inventory} reload={reload} />;
+      case "vendors": return <VendorsPage user={user} company={company} />;
       case "team": return <TeamPage user={user} users={users} reload={reload} />;
       case "products": return <ProductsPage user={user} products={products} reload={reload} />;
       case "settings": return <SettingsPage user={user} company={company} reload={reload} />;
