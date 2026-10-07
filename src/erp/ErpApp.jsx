@@ -1741,13 +1741,17 @@ function JobWorkPage({ user, jobs, inventory, reload }) {
       <Modal show={show} onClose={() => { setShow(false); setEdit(null); }}
         title={edit ? `Edit ${edit.number}` : "Create multi-stage job work"} wide>
         <datalist id="jw-vendors">{sugg.vendors.map(v => <option key={v} value={v} />)}</datalist>
-        <datalist id="jw-items">{sugg.items.map(v => <option key={v} value={v} />)}</datalist>
+        <datalist id="jw-items">{[...new Set([...inventory.map(it => `${it.sku} · ${it.name}`), ...inventory.map(it => it.name), ...sugg.items])].map(v => <option key={v} value={v} />)}</datalist>
         <datalist id="jw-types">{sugg.work_types.map(v => <option key={v} value={v} />)}</datalist>
         <datalist id="jw-processes">{(sugg.processes || []).map(v => <option key={v} value={v} />)}</datalist>
         <div className="form-grid">
           <div className="form-row-2">
             <div><label className="field-label">Item / material *</label>
-              <input list="jw-items" value={j.item} onChange={e => setJ({ ...j, item: e.target.value })} data-testid="jw-item" /></div>
+              <input list="jw-items" value={j.item} onChange={e => {
+                const v = e.target.value;
+                const match = inventory.find(it => `${it.sku} · ${it.name}` === v || it.name === v);
+                setJ({ ...j, item: match ? match.name : v, inventory_item_id: match ? match.id : j.inventory_item_id });
+              }} data-testid="jw-item" /></div>
             <div><label className="field-label">Work type (optional)</label>
               <input list="jw-types" value={j.work_type} onChange={e => setJ({ ...j, work_type: e.target.value })} data-testid="jw-work-type"
                 placeholder="e.g. Hardening + Nitriding + Blackodising" /></div>
